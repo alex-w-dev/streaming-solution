@@ -10,6 +10,7 @@ const GROUND_Y = MAP_HEIGHT * SCALE - 50; // позиция земли (вид �
 const Battle = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
+  const [tankHeights, setTankHeights] = useState<Map<string, number>>(new Map());
 
   // Компонент битвы танков
 
@@ -54,6 +55,20 @@ const Battle = () => {
 
   const getTankX = (x: number) => {
     return (x / MAP_WIDTH) * (MAP_WIDTH * SCALE);
+  };
+
+  const getTankColorFilter = (tank: GameTank): string => {
+    // Генерируем цвет на основе ID танка для разнообразия
+    const idHash = tank.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const hue = idHash % 360; // оттенок от 0 до 360
+    
+    // Для премиум танков используем более яркие цвета
+    if (tank.tankData.premium) {
+      return `hue-rotate(${hue}deg) saturate(1.5) brightness(1.2)`;
+    }
+    
+    // Для обычных танков используем более приглушенные цвета
+    return `hue-rotate(${hue}deg) saturate(1.2) brightness(1.1)`;
   };
 
   return (
@@ -157,9 +172,9 @@ const Battle = () => {
                   key={tank.id}
                   style={{
                     position: 'absolute',
-                    left: tankX - 40,
+                    left: tankX,
                     bottom: 50, // выравнивание по низу (над землей)
-                    width: 80,
+                    transform: 'translateX(-50%)', // центрирование по X
                   }}
                 >
                   {/* Индикатор здоровья */}
@@ -188,8 +203,6 @@ const Battle = () => {
                   {/* Танк */}
                   <div
                     style={{
-                      width: 80,
-                      height: 60,
                       display: 'flex',
                       alignItems: 'flex-end', // выравнивание по низу
                       justifyContent: 'center',
@@ -203,9 +216,20 @@ const Battle = () => {
                         src={iconUrl}
                         alt={tank.tankData.name || 'Танк'}
                         style={{
-                          width: '80px',
-                          height: '60px',
-                          objectFit: 'contain',
+                          display: 'block',
+                          maxWidth: 'none',
+                          height: 'auto',
+                          filter: getTankColorFilter(tank),
+                        }}
+                        onLoad={(e) => {
+                          // Сохраняем высоту изображения для расчета позиции пуль
+                          const target = e.target as HTMLImageElement;
+                          const height = target.naturalHeight || target.offsetHeight;
+                          setTankHeights((prev) => {
+                            const newMap = new Map(prev);
+                            newMap.set(tank.id, height);
+                            return newMap;
+                          });
                         }}
                         onError={(e) => {
                           // Fallback если иконка не загрузилась
@@ -214,6 +238,12 @@ const Battle = () => {
                           const parent = target.parentElement;
                           if (parent) {
                             parent.innerHTML = `<div style="width: 40px; height: 30px; background: ${tank.side === 'left' ? '#4CAF50' : '#F44336'}; border: 2px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${tank.isShooting ? '⚡' : '▣'}</div>`;
+                            // Устанавливаем высоту для fallback
+                            setTankHeights((prev) => {
+                              const newMap = new Map(prev);
+                              newMap.set(tank.id, 30);
+                              return newMap;
+                            });
                           }
                         }}
                       />
@@ -241,22 +271,31 @@ const Battle = () => {
             })}
 
             {/* Снаряды (вид сбоку) */}
-            {gameState.projectiles.map((projectile: GameProjectile) => (
-              <div
-                key={projectile.id}
-                style={{
-                  position: 'absolute',
-                  left: getTankX(projectile.x) - 4,
-                  top: GROUND_Y - 35,
-                  width: 8,
-                  height: 8,
-                  backgroundColor: '#FFD700',
-                  borderRadius: '50%',
-                  border: '2px solid #FFA500',
-                  boxShadow: '0 0 5px #FFD700',
-                }}
-              />
-            ))}
+            {gameState.projectiles.map((projectile: GameProjectile) => {
+              // Находим танк, который выстрелил этот снаряд
+              const shooter = gameState.tanks.find((t) => t.id === projectile.shooterId);
+              // Получаем реальную высоту изображения танка
+              const tankHeight = shooter ? (tankHeights.get(shooter.id) || 20) : 20;
+              // Пули на уровне 2/3 от высоты изображения танка
+              const bulletOffset = tankHeight * (2 / 3);
+              
+              return (
+                <div
+                  key={projectile.id}
+                  style={{
+                    position: 'absolute',
+                    left: getTankX(projectile.x) - 4,
+                    bottom: 50 + bulletOffset, // на уровне 2/3 от высоты изображения танка
+                    width: 8,
+                    height: 8,
+                    backgroundColor: '#FFD700',
+                    borderRadius: '50%',
+                    border: '2px solid #FFA500',
+                    boxShadow: '0 0 5px #FFD700',
+                  }}
+                />
+              );
+            })}
 
             {/* Линия середины */}
             <div
