@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Tank } from "@streaming/shared";
+import { getTankIconUrl } from "@streaming/shared";
 
 const TanksList = () => {
   const [tanks, setTanks] = useState<Tank[]>([]);
@@ -45,25 +46,12 @@ const TanksList = () => {
             }}
           >
             {(() => {
-              // Используем contour для получения пути к иконке
-              const iconPath = tank.contour as string;
-              if (!iconPath || typeof iconPath !== "string") return null;
-
-              // Извлекаем ID из пути icon (например, "wot/current/vehicle/contour/ussr-R04_T-34.png" -> "ussr-R04_T-34")
-              const fileName =
-                iconPath
-                  .split("/")
-                  .pop()
-                  ?.replace(/\.(png|svg)$/, "") || "";
-              // Убираем префикс нации, если есть (например, "ussr-R04_T-34" -> "R04_T-34")
-              const tankId = fileName.includes("-")
-                ? fileName.split("-").slice(1).join("-")
-                : fileName;
-              const iconId = tankId.toLowerCase();
+              const iconUrl = getTankIconUrl(tank);
+              if (!iconUrl) return null;
 
               return (
                 <img
-                  src={`https://eu-wotp.wgcdn.co/dcont/tankopedia_images/${iconId}/${iconId}_icon.svg`}
+                  src={iconUrl}
                   alt={tank.name || ""}
                   style={{
                     width: "80px",

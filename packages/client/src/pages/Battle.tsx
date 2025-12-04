@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import type { GameState, GameTank, GameProjectile } from '@streaming/shared';
+import { getTankIconUrl } from '@streaming/shared';
 
 const MAP_WIDTH = 2000;
 const MAP_HEIGHT = 600; // высота для вида сбоку
@@ -42,34 +43,22 @@ const Battle = () => {
     };
   }, []);
 
-  const getTankIconUrl = (tank: GameTank): string | null => {
-    const iconPath = tank.tankData.contour as string;
-    if (!iconPath || typeof iconPath !== 'string') return null;
-
-    const fileName = iconPath.split('/').pop()?.replace(/\.(png|svg)$/, '') || '';
-    const tankId = fileName.includes('-') ? fileName.split('-').slice(1).join('-') : fileName;
-    const iconId = tankId.toLowerCase();
-
-    return `https://eu-wotp.wgcdn.co/dcont/tankopedia_images/${iconId}/${iconId}_icon.svg`;
+  const getColorizedTankIconUrl = (tank: GameTank): string | null => {
+    const originalUrl = getTankIconUrl(tank.tankData);
+    if (!originalUrl) {
+      console.warn('No icon URL for tank:', tank.tankData.name);
+      return null;
+    }
+    
+    // Используем endpoint сервера для получения цветной иконки через query параметр
+    const encodedUrl = encodeURIComponent(originalUrl);
+    return `http://localhost:3000/tanks/colorized-icon?url=${encodedUrl}`;
   };
 
   const getTankX = (x: number) => {
     return (x / MAP_WIDTH) * (MAP_WIDTH * SCALE);
   };
 
-  const getTankColorFilter = (tank: GameTank): string => {
-    // Генерируем цвет на основе ID танка для разнообразия
-    const idHash = tank.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const hue = idHash % 360; // оттенок от 0 до 360
-    
-    // Для премиум танков используем более яркие цвета
-    if (tank.tankData.premium) {
-      return `hue-rotate(${hue}deg) saturate(1.5) brightness(1.2)`;
-    }
-    
-    // Для обычных танков используем более приглушенные цвета
-    return `hue-rotate(${hue}deg) saturate(1.2) brightness(1.1)`;
-  };
 
   return (
     <div style={{ padding: '20px' }}>
@@ -162,7 +151,7 @@ const Battle = () => {
 
             {/* Танки (вид сбоку) */}
             {gameState.tanks.map((tank: GameTank) => {
-              const iconUrl = getTankIconUrl(tank);
+              const iconUrl = getColorizedTankIconUrl(tank);
               const tankX = getTankX(tank.x);
               const healthPercent = (tank.health / tank.maxHealth) * 100;
               const healthColor = tank.side === 'left' ? '#4CAF50' : '#F44336';
@@ -219,7 +208,6 @@ const Battle = () => {
                           display: 'block',
                           maxWidth: 'none',
                           height: 'auto',
-                          filter: getTankColorFilter(tank),
                         }}
                         onLoad={(e) => {
                           // Сохраняем высоту изображения для расчета позиции пуль
@@ -233,6 +221,7 @@ const Battle = () => {
                         }}
                         onError={(e) => {
                           // Fallback если иконка не загрузилась
+                          console.error('Failed to load tank icon:', iconUrl, tank.tankData.name);
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
                           const parent = target.parentElement;

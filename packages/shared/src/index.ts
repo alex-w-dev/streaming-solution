@@ -91,3 +91,15 @@ export interface GameEvent {
   data: any;
   timestamp: number;
 }
+
+// Функция для получения URL оригинальной иконки танка
+export const getTankIconUrl = (tank: Tank): string | null => {
+  const iconPath = tank.contour as string;
+  if (!iconPath || typeof iconPath !== 'string') return null;
+
+  const fileName = iconPath.split('/').pop()?.replace(/\.(png|svg)$/, '') || '';
+  const tankId = fileName.includes('-') ? fileName.split('-').slice(1).join('-') : fileName;
+  const iconId = tankId.toLowerCase();
+
+  return `https://eu-wotp.wgcdn.co/dcont/tankopedia_images/${iconId}/${iconId}_icon.svg`;
+};
