@@ -8,6 +8,7 @@ function App() {
         <Link to="/">Главная</Link>
         <Link to="/test-websocket">Test WebSocket</Link>
         <Link to="/tanks">Танки</Link>
+        <Link to="/battle">Битва</Link>
       </nav>
       <Outlet />
     </div>

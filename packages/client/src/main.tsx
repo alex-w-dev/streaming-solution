@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import TestWebsocket from './pages/TestWebsocket.tsx'
 import TanksList from './pages/TanksList.tsx'
+import Battle from './pages/Battle.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
           />
           <Route path="test-websocket" element={<TestWebsocket />} />
           <Route path="tanks" element={<TanksList />} />
+          <Route path="battle" element={<Battle />} />
         </Route>
       </Routes>
     </BrowserRouter>
