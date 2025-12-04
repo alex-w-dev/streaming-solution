@@ -7,6 +7,7 @@ function App() {
       <nav style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
         <Link to="/">Главная</Link>
         <Link to="/test-websocket">Test WebSocket</Link>
+        <Link to="/tanks">Танки</Link>
       </nav>
       <Outlet />
     </div>
