@@ -55,7 +55,7 @@ export interface Tank {
 export interface GameTank {
   id: string;
   tankData: Tank;
-  side: 'left' | 'right';
+  side: "left" | "right";
   x: number; // позиция (0-2000)
   health: number;
   maxHealth: number;
@@ -64,6 +64,8 @@ export interface GameTank {
   lastShotTime: number;
   fireRate: number; // выстрелов в секунду
   speed: number; // единиц в секунду (скорость в км/ч / 3.6 для перевода в м/с, затем * 1000 для единиц)
+  lane: number; // полоса глубины (0-19, где 0 - самая дальняя, 19 - самая близкая)
+  shootingRange: number; // дальность стрельбы (300-450)
 }
 
 export interface GameProjectile {
@@ -87,7 +89,15 @@ export interface GameState {
 }
 
 export interface GameEvent {
-  type: 'tankSpawned' | 'tankMoved' | 'tankShooting' | 'tankStopped' | 'projectileFired' | 'projectileHit' | 'tankDestroyed' | 'gameReset';
+  type:
+    | "tankSpawned"
+    | "tankMoved"
+    | "tankShooting"
+    | "tankStopped"
+    | "projectileFired"
+    | "projectileHit"
+    | "tankDestroyed"
+    | "gameReset";
   data: any;
   timestamp: number;
 }
@@ -95,10 +105,16 @@ export interface GameEvent {
 // Функция для получения URL оригинальной иконки танка
 export const getTankIconUrl = (tank: Tank): string | null => {
   const iconPath = tank.contour as string;
-  if (!iconPath || typeof iconPath !== 'string') return null;
+  if (!iconPath || typeof iconPath !== "string") return null;
 
-  const fileName = iconPath.split('/').pop()?.replace(/\.(png|svg)$/, '') || '';
-  const tankId = fileName.includes('-') ? fileName.split('-').slice(1).join('-') : fileName;
+  const fileName =
+    iconPath
+      .split("/")
+      .pop()
+      ?.replace(/\.(png|svg)$/, "") || "";
+  const tankId = fileName.includes("-")
+    ? fileName.split("-").slice(1).join("-")
+    : fileName;
   const iconId = tankId.toLowerCase();
 
   return `https://eu-wotp.wgcdn.co/dcont/tankopedia_images/${iconId}/${iconId}_icon.svg`;

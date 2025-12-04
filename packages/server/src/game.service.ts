@@ -1,5 +1,11 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Tank, GameTank, GameProjectile, GameState, GameEvent } from '@streaming/shared';
+import {
+  Tank,
+  GameTank,
+  GameProjectile,
+  GameState,
+  GameEvent,
+} from '@streaming/shared';
 import { TanksService } from './tanks.service';
 
 @Injectable()
@@ -79,14 +85,20 @@ export class GameService implements OnModuleInit {
     if (allTanks.length === 0) return;
 
     // Левый респаун
-    if (now - this.gameState.lastSpawnTime.left >= this.getRandomSpawnInterval()) {
+    if (
+      now - this.gameState.lastSpawnTime.left >=
+      this.getRandomSpawnInterval()
+    ) {
       const randomTank = allTanks[Math.floor(Math.random() * allTanks.length)];
       this.spawnTank(randomTank, 'left');
       this.gameState.lastSpawnTime.left = now;
     }
 
     // Правый респаун
-    if (now - this.gameState.lastSpawnTime.right >= this.getRandomSpawnInterval()) {
+    if (
+      now - this.gameState.lastSpawnTime.right >=
+      this.getRandomSpawnInterval()
+    ) {
       const randomTank = allTanks[Math.floor(Math.random() * allTanks.length)];
       this.spawnTank(randomTank, 'right');
       this.gameState.lastSpawnTime.right = now;
@@ -101,26 +113,42 @@ export class GameService implements OnModuleInit {
   }
 
   private spawnTank(tankData: Tank, side: 'left' | 'right') {
-    if (!tankData.max_health || !tankData.damage1 || !tankData.damage_per_minute || !tankData.speed_forward_kmh) {
+    if (
+      !tankData.max_health ||
+      !tankData.damage1 ||
+      !tankData.damage_per_minute ||
+      !tankData.speed_forward_kmh
+    ) {
       return; // пропускаем танки без необходимых данных
     }
 
-    const fireRate = (tankData.damage_per_minute / tankData.damage1) / 60; // выстрелов в секунду
+    const fireRate = tankData.damage_per_minute / tankData.damage1 / 60; // выстрелов в секунду
     // Конвертируем км/ч в единицы/сек: если 1000 единиц = 1 км, то 1 км/ч = 1000/3600 единиц/сек = 1/3.6 единиц/сек
     // Используем прямую конвертацию для сохранения пропорций между танками
     const speedKmh = tankData.speed_forward_kmh;
     const speed = speedKmh / 3.6; // единиц в секунду
-    
+
     // Логирование для отладки (можно убрать позже)
     if (this.gameState.tanks.length < 5) {
-      console.log(`Spawned tank: ${tankData.name}, speed: ${speedKmh} km/h = ${speed.toFixed(2)} units/sec`);
+      console.log(
+        `Spawned tank: ${tankData.name}, speed: ${speedKmh} km/h = ${speed.toFixed(2)} units/sec`,
+      );
     }
+
+    // Выбираем случайную полосу (0-19, где 0 - самая дальняя, 19 - самая близкая)
+    const lane = Math.floor(Math.random() * 20);
+
+    // Случайная дальность стрельбы от 300 до 450
+    const shootingRange = 300 + Math.random() * 150;
 
     const gameTank: GameTank = {
       id: `tank-${Date.now()}-${Math.random()}`,
       tankData,
       side,
-      x: side === 'left' ? this.gameState.leftRespawnX : this.gameState.rightRespawnX,
+      x:
+        side === 'left'
+          ? this.gameState.leftRespawnX
+          : this.gameState.rightRespawnX,
       health: tankData.max_health,
       maxHealth: tankData.max_health,
       isShooting: false,
@@ -128,6 +156,8 @@ export class GameService implements OnModuleInit {
       lastShotTime: 0,
       fireRate,
       speed,
+      lane,
+      shootingRange,
     };
 
     this.gameState.tanks.push(gameTank);
@@ -140,14 +170,23 @@ export class GameService implements OnModuleInit {
 
       if (enemies.length > 0) {
         // Есть враги в зоне обнаружения (300)
-        const enemiesInRange = enemies.filter((e) => this.getDistance(tank.x, e.x) <= this.SHOOTING_RANGE);
+        // Используем индивидуальную дальность стрельбы танка
+        const enemiesInRange = enemies.filter(
+          (e) => this.getDistance(tank.x, e.x) <= tank.shootingRange,
+        );
 
         if (enemiesInRange.length > 0) {
           // Есть враги в зоне стрельбы (450)
           tank.isShooting = true;
-          if (!tank.targetId || !enemiesInRange.find((e) => e.id === tank.targetId)) {
+          if (
+            !tank.targetId ||
+            !enemiesInRange.find((e) => e.id === tank.targetId)
+          ) {
             // Выбираем случайного врага в зоне стрельбы
-            tank.targetId = enemiesInRange[Math.floor(Math.random() * enemiesInRange.length)].id;
+            tank.targetId =
+              enemiesInRange[
+                Math.floor(Math.random() * enemiesInRange.length)
+              ].id;
           }
 
           // Стрельба
@@ -213,7 +252,10 @@ export class GameService implements OnModuleInit {
     tank.x += distance * direction;
 
     // Ограничиваем позицию
-    tank.x = Math.max(this.gameState.leftRespawnX, Math.min(this.gameState.rightRespawnX, tank.x));
+    tank.x = Math.max(
+      this.gameState.leftRespawnX,
+      Math.min(this.gameState.rightRespawnX, tank.x),
+    );
   }
 
   private updateProjectiles(deltaTime: number) {
@@ -221,7 +263,9 @@ export class GameService implements OnModuleInit {
     const projectilesToRemove: string[] = [];
 
     for (const projectile of this.gameState.projectiles) {
-      const shooter = this.gameState.tanks.find((t) => t.id === projectile.shooterId);
+      const shooter = this.gameState.tanks.find(
+        (t) => t.id === projectile.shooterId,
+      );
       if (!shooter) {
         projectilesToRemove.push(projectile.id);
         continue;
@@ -274,8 +318,12 @@ export class GameService implements OnModuleInit {
 
   private checkVictory() {
     // Проверяем, достиг ли кто-то вражеского респауна
-    const leftTanks = this.gameState.tanks.filter((t) => t.side === 'left' && t.health > 0);
-    const rightTanks = this.gameState.tanks.filter((t) => t.side === 'right' && t.health > 0);
+    const leftTanks = this.gameState.tanks.filter(
+      (t) => t.side === 'left' && t.health > 0,
+    );
+    const rightTanks = this.gameState.tanks.filter(
+      (t) => t.side === 'right' && t.health > 0,
+    );
 
     let victory = false;
 
@@ -340,4 +388,3 @@ export class GameService implements OnModuleInit {
     }
   }
 }
-
