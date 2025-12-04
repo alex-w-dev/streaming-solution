@@ -12,6 +12,8 @@ const Battle = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
   const [tankHeights, setTankHeights] = useState<Map<string, number>>(new Map());
+  const [useColorizedIcons, setUseColorizedIcons] = useState(true);
+  const [showHealthBars, setShowHealthBars] = useState(true);
 
   // Компонент битвы танков
 
@@ -43,16 +45,21 @@ const Battle = () => {
     };
   }, []);
 
-  const getColorizedTankIconUrl = (tank: GameTank): string | null => {
+  const getTankIconUrlForDisplay = (tank: GameTank): string | null => {
     const originalUrl = getTankIconUrl(tank.tankData);
     if (!originalUrl) {
       console.warn('No icon URL for tank:', tank.tankData.name);
       return null;
     }
     
-    // Используем endpoint сервера для получения цветной иконки через query параметр
-    const encodedUrl = encodeURIComponent(originalUrl);
-    return `http://localhost:3000/tanks/colorized-icon?url=${encodedUrl}`;
+    // Если цветные иконки включены, используем endpoint сервера
+    if (useColorizedIcons) {
+      const encodedUrl = encodeURIComponent(originalUrl);
+      return `http://localhost:3000/tanks/colorized-icon?url=${encodedUrl}`;
+    }
+    
+    // Иначе возвращаем оригинальный URL
+    return originalUrl;
   };
 
   const getTankX = (x: number) => {
@@ -63,8 +70,30 @@ const Battle = () => {
   return (
     <div style={{ padding: '20px' }}>
       <h1>Битва танков</h1>
-      <div style={{ marginBottom: '10px' }}>
-        Статус: {connected ? 'Подключено' : 'Отключено'}
+      <div style={{ marginBottom: '10px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          Статус: {connected ? 'Подключено' : 'Отключено'}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={useColorizedIcons}
+              onChange={(e) => setUseColorizedIcons(e.target.checked)}
+            />
+            <span>Цветные иконки</span>
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showHealthBars}
+              onChange={(e) => setShowHealthBars(e.target.checked)}
+            />
+            <span>Полоски жизней</span>
+          </label>
+        </div>
       </div>
       {gameState && (
         <>
@@ -151,7 +180,7 @@ const Battle = () => {
 
             {/* Танки (вид сбоку) */}
             {gameState.tanks.map((tank: GameTank) => {
-              const iconUrl = getColorizedTankIconUrl(tank);
+              const iconUrl = getTankIconUrlForDisplay(tank);
               const tankX = getTankX(tank.x);
               const healthPercent = (tank.health / tank.maxHealth) * 100;
               const healthColor = tank.side === 'left' ? '#4CAF50' : '#F44336';
@@ -167,27 +196,29 @@ const Battle = () => {
                   }}
                 >
                   {/* Индикатор здоровья */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: -20,
-                      left: 0,
-                      width: '100%',
-                      height: 6,
-                      backgroundColor: '#333',
-                      borderRadius: 3,
-                      overflow: 'hidden',
-                    }}
-                  >
+                  {showHealthBars && (
                     <div
                       style={{
-                        width: `${healthPercent}%`,
-                        height: '100%',
-                        backgroundColor: healthColor,
-                        transition: 'width 0.1s ease',
+                        position: 'absolute',
+                        top: -20,
+                        left: 0,
+                        width: '100%',
+                        height: 6,
+                        backgroundColor: '#333',
+                        borderRadius: 3,
+                        overflow: 'hidden',
                       }}
-                    />
-                  </div>
+                    >
+                      <div
+                        style={{
+                          width: `${healthPercent}%`,
+                          height: '100%',
+                          backgroundColor: healthColor,
+                          transition: 'width 0.1s ease',
+                        }}
+                      />
+                    </div>
+                  )}
 
                   {/* Танк */}
                   <div
@@ -195,7 +226,6 @@ const Battle = () => {
                       display: 'flex',
                       alignItems: 'flex-end', // выравнивание по низу
                       justifyContent: 'center',
-                      filter: tank.isShooting ? 'drop-shadow(0 0 10px #FFD700)' : 'none',
                       transform: tank.side === 'right' ? 'scaleX(-1)' : 'none',
                     }}
                     title={`${tank.tankData.name || 'Танк'} | HP: ${Math.round(tank.health)}/${tank.maxHealth}`}
