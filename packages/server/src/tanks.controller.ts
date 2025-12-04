@@ -13,6 +13,8 @@ import axios from 'axios';
 
 @Controller('tanks')
 export class TanksController {
+  private iconCache = new Map<string, string>(); // Кеш для цветных иконок
+
   constructor(private readonly tanksService: TanksService) {}
 
   @Get()
@@ -35,6 +37,16 @@ export class TanksController {
       // Если все еще есть закодированные символы, декодируем еще раз
       if (decodedIcon.includes('%')) {
         decodedIcon = decodeURIComponent(decodedIcon);
+      }
+
+      // Проверяем кеш
+      if (this.iconCache.has(decodedIcon)) {
+        const cachedSvg = this.iconCache.get(decodedIcon)!;
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.setHeader('X-Cache', 'HIT');
+        res.send(cachedSvg);
+        return;
       }
 
       // Загружаем оригинальный SVG
@@ -69,9 +81,13 @@ export class TanksController {
         );
       }
 
+      // Сохраняем в кеш
+      this.iconCache.set(decodedIcon, svgContent);
+
       // Устанавливаем заголовки для SVG
       res.setHeader('Content-Type', 'image/svg+xml');
       res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('X-Cache', 'MISS');
       res.send(svgContent);
     } catch (error) {
       console.error('Error fetching colorized icon:', error);
