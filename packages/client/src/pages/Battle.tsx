@@ -4,7 +4,7 @@ import type { GameState, GameTank, GameProjectile } from "@streaming/shared";
 import { getTankIconUrl } from "@streaming/shared";
 
 const MAP_WIDTH = 2000;
-const MAP_HEIGHT = 600; // высота для вида сбоку
+const MAP_HEIGHT = 200; // высота для вида сбоку
 const SCALE = 0.5; // масштаб для отображения
 const NUM_LANES = 20; // количество полос глубины
 const BASE_SIZE = 100; // базовый размер в процентах (самая дальняя полоса)
@@ -18,8 +18,8 @@ const Battle = () => {
     new Map()
   );
   const [useColorizedIcons, setUseColorizedIcons] = useState(true);
-  const [showHealthBars, setShowHealthBars] = useState(true);
-  const [showTankNames, setShowTankNames] = useState(true);
+  const [showHealthBars, setShowHealthBars] = useState(false);
+  const [showTankNames, setShowTankNames] = useState(false);
 
   // Компонент битвы танков
 
@@ -87,7 +87,7 @@ const Battle = () => {
   };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div>
       <h1>Битва танков</h1>
       <div
         style={{
