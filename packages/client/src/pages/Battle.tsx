@@ -6,11 +6,11 @@ import BattleLine from "../components/BattleLine";
 
 const MAP_WIDTH = 2000;
 const MAP_HEIGHT = 200; // высота для вида сбоку
-const SCALE = 0.5; // масштаб для отображения
+const SCALE = 1; // масштаб для отображения
 const NUM_LANES = 20; // количество полос глубины
 const BASE_SIZE = 80; // базовый размер в процентах (самая дальняя полоса) - 0.8
 const MAX_SIZE = 130; // максимальный размер в процентах (самая близкая полоса) - 1.3
-const LANE_HEIGHT_OFFSET = 2; // смещение каждой полосы в пикселях
+const LANE_HEIGHT_OFFSET = 1; // смещение каждой полосы в пикселях
 
 const Battle = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -135,12 +135,15 @@ const Battle = () => {
         <>
           <div
             style={{
-              position: "relative",
+              position: "fixed",
+              top: 0,
+              left: "50%",
+              transform: "translateX(-50%)",
               width: MAP_WIDTH * SCALE,
-              height: MAP_HEIGHT * SCALE,
-              margin: "0 auto",
+              height: "30px",
               overflow: "hidden",
               cursor: "pointer",
+              zIndex: 100,
             }}
             onClick={() => {
               const socket = (window as any).battleSocket;
@@ -261,7 +264,9 @@ const Battle = () => {
                             alignItems: "flex-end",
                             justifyContent: "center",
                             transform:
-                              tank.side === "right" ? "scaleX(-1)" : "",
+                              tank.side === "right"
+                                ? "scaleX(-1) scale(0.5)"
+                                : "scale(0.5)",
                             transformOrigin: "bottom center",
                           }}
                           title={`${
@@ -299,14 +304,14 @@ const Battle = () => {
                                 target.style.display = "none";
                                 const parent = target.parentElement;
                                 if (parent) {
-                                  parent.innerHTML = `<div style="width: 40px; height: 30px; background: ${
+                                  parent.innerHTML = `<div style="width: 20px; height: 15px; background: ${
                                     tank.side === "left" ? "#4CAF50" : "#F44336"
-                                  }; border: 2px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${
+                                  }; border: 1px solid #000; border-radius: 2px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${
                                     tank.isShooting ? "⚡" : "▣"
                                   }</div>`;
                                   setTankHeights((prev) => {
                                     const newMap = new Map(prev);
-                                    newMap.set(tank.id, 30);
+                                    newMap.set(tank.id, 15);
                                     return newMap;
                                   });
                                 }
@@ -315,12 +320,12 @@ const Battle = () => {
                           ) : (
                             <div
                               style={{
-                                width: 40,
-                                height: 30,
+                                width: 20,
+                                height: 15,
                                 backgroundColor:
                                   tank.side === "left" ? "#4CAF50" : "#F44336",
-                                border: "2px solid #000",
-                                borderRadius: "4px",
+                                border: "1px solid #000",
+                                borderRadius: "2px",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -343,26 +348,27 @@ const Battle = () => {
                     );
                     if (!shooter) return null;
 
-                    // Получаем реальную высоту изображения танка
-                    const tankHeight = tankHeights.get(shooter.id) || 20;
+                    // Получаем реальную высоту изображения танка (уже уменьшенного в 2 раза)
+                    const tankHeight =
+                      (tankHeights.get(shooter.id) || 20) * 0.5;
                     // Пули на уровне 2/3 от высоты изображения танка
                     const bulletOffset = tankHeight * (2 / 3);
                     // Смещение пули в зависимости от стороны танка
-                    const bulletXOffset = shooter.side === "left" ? 30 : -30;
+                    const bulletXOffset = shooter.side === "left" ? 15 : -15;
 
                     return (
                       <div
                         key={projectile.id}
                         style={{
                           position: "absolute",
-                          left: getTankX(projectile.x) + bulletXOffset - 2,
+                          left: getTankX(projectile.x) + bulletXOffset - 1,
                           bottom: bulletOffset,
-                          width: 4,
-                          height: 4,
+                          width: 2,
+                          height: 2,
                           backgroundColor: "#FFD700",
                           borderRadius: "50%",
-                          border: "1px solid #FFA500",
-                          boxShadow: "0 0 3px #FFD700",
+                          border: "0.5px solid #FFA500",
+                          boxShadow: "0 0 1.5px #FFD700",
                           transition: "left 0.05s linear",
                           willChange: "left",
                         }}

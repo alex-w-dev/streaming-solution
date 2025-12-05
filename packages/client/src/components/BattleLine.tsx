@@ -24,4 +24,3 @@ const BattleLine = ({ scale, children, style }: BattleLineProps) => {
 };
 
 export default BattleLine;
-

@@ -10,12 +10,45 @@ import type { Response } from 'express';
 import { TanksService } from './tanks.service';
 import type { Tank } from '@streaming/shared';
 import axios from 'axios';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 @Controller('tanks')
 export class TanksController {
-  private iconCache = new Map<string, string>(); // Кеш для цветных иконок
+  private readonly CACHE_DIR = path.join(process.cwd(), 'data', 'tank-icons');
 
-  constructor(private readonly tanksService: TanksService) {}
+  constructor(private readonly tanksService: TanksService) {
+    this.ensureCacheDir();
+  }
+
+  private async ensureCacheDir(): Promise<void> {
+    try {
+      await fs.mkdir(this.CACHE_DIR, { recursive: true });
+    } catch (error) {
+      console.error('Error creating cache directory:', error);
+    }
+  }
+
+  private getCacheFileName(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const fileName = path.basename(pathname);
+      return fileName || 'icon.svg';
+    } catch (error) {
+      // Если не удалось распарсить URL, извлекаем имя файла из пути
+      const lastSlash = url.lastIndexOf('/');
+      const fileName =
+        lastSlash >= 0 ? url.substring(lastSlash + 1) : 'icon.svg';
+      // Убираем query параметры если есть
+      const questionMark = fileName.indexOf('?');
+      return questionMark >= 0 ? fileName.substring(0, questionMark) : fileName;
+    }
+  }
+
+  private getCacheFilePath(url: string): string {
+    return path.join(this.CACHE_DIR, this.getCacheFileName(url));
+  }
 
   @Get()
   getTanks(): Tank[] {
@@ -39,24 +72,32 @@ export class TanksController {
         decodedIcon = decodeURIComponent(decodedIcon);
       }
 
-      // Проверяем кеш
-      if (this.iconCache.has(decodedIcon)) {
-        const cachedSvg = this.iconCache.get(decodedIcon)!;
-        res.setHeader('Content-Type', 'image/svg+xml');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.setHeader('X-Cache', 'HIT');
-        res.send(cachedSvg);
-        return;
+      const cacheFilePath = this.getCacheFilePath(decodedIcon);
+
+      // Проверяем локальный кеш оригинального файла
+      let svgContent: string;
+      let cacheHit = false;
+      try {
+        svgContent = await fs.readFile(cacheFilePath, 'utf-8');
+        cacheHit = true;
+      } catch (error) {
+        // Файл не найден, загружаем с сервера
+        const response = await axios.get(decodedIcon, {
+          responseType: 'text',
+          timeout: 5000,
+        });
+        svgContent = response.data;
+
+        // Сохраняем оригинальный SVG в кеш
+        try {
+          await fs.writeFile(cacheFilePath, svgContent, 'utf-8');
+        } catch (error) {
+          console.error('Error saving icon to cache:', error);
+          // Продолжаем даже если не удалось сохранить
+        }
       }
 
-      // Загружаем оригинальный SVG
-      const response = await axios.get(decodedIcon, {
-        responseType: 'text',
-        timeout: 5000,
-      });
-
-      let svgContent = response.data;
-
+      // Обрабатываем цветом (применяем к оригинальному или закешированному SVG)
       // Генерируем случайный цвет на основе URL
       const urlHash = decodedIcon
         .split('')
@@ -68,27 +109,24 @@ export class TanksController {
 
       // Заменяем fill в SVG
       // Ищем все fill атрибуты и заменяем их на наш цвет
-      svgContent = svgContent.replace(/fill="[^"]*"/g, `fill="${color}"`);
+      let colorizedSvg = svgContent.replace(/fill="[^"]*"/g, `fill="${color}"`);
 
       // Также заменяем fill без кавычек и fill в style
-      svgContent = svgContent.replace(/fill:\s*[^;]+/g, `fill: ${color}`);
+      colorizedSvg = colorizedSvg.replace(/fill:\s*[^;]+/g, `fill: ${color}`);
 
       // Если нет fill атрибутов, добавляем fill к основному элементу
-      if (!svgContent.includes('fill=') && !svgContent.includes('fill:')) {
-        svgContent = svgContent.replace(
+      if (!colorizedSvg.includes('fill=') && !colorizedSvg.includes('fill:')) {
+        colorizedSvg = colorizedSvg.replace(
           /<svg([^>]*)>/,
           `<svg$1 fill="${color}">`,
         );
       }
 
-      // Сохраняем в кеш
-      this.iconCache.set(decodedIcon, svgContent);
-
       // Устанавливаем заголовки для SVG
       res.setHeader('Content-Type', 'image/svg+xml');
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.setHeader('X-Cache', 'MISS');
-      res.send(svgContent);
+      res.setHeader('X-Cache', cacheHit ? 'HIT' : 'MISS');
+      res.send(colorizedSvg);
     } catch (error) {
       console.error('Error fetching colorized icon:', error);
       throw new HttpException(
