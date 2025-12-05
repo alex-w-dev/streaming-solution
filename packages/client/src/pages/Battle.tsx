@@ -88,75 +88,8 @@ const Battle = () => {
 
   return (
     <div>
-      <h1>Битва танков</h1>
-      <div
-        style={{
-          marginBottom: "10px",
-          display: "flex",
-          gap: "20px",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>Статус: {connected ? "Подключено" : "Отключено"}</div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={useColorizedIcons}
-              onChange={(e) => setUseColorizedIcons(e.target.checked)}
-            />
-            <span>Цветные иконки</span>
-          </label>
-        </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={showHealthBars}
-              onChange={(e) => setShowHealthBars(e.target.checked)}
-            />
-            <span>Полоски жизней</span>
-          </label>
-        </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={showTankNames}
-              onChange={(e) => setShowTankNames(e.target.checked)}
-            />
-            <span>Названия танков</span>
-          </label>
-        </div>
-      </div>
       {gameState && (
         <>
-          <div style={{ marginBottom: "10px" }}>
-            Танков на поле: {gameState.tanks.length} | Снарядов:{" "}
-            {gameState.projectiles.length}
-          </div>
           <div
             style={{
               position: "relative",
@@ -391,6 +324,79 @@ const Battle = () => {
           </div>
         </>
       )}
+
+      {/* Настройки и информация */}
+      <div style={{ marginTop: "20px", padding: "0 20px" }}>
+        <h1>Битва танков</h1>
+        <div
+          style={{
+            marginBottom: "10px",
+            display: "flex",
+            gap: "20px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>Статус: {connected ? "Подключено" : "Отключено"}</div>
+          {gameState && (
+            <div>
+              Танков на поле: {gameState.tanks.length} | Снарядов:{" "}
+              {gameState.projectiles.length}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={useColorizedIcons}
+                onChange={(e) => setUseColorizedIcons(e.target.checked)}
+              />
+              <span>Цветные иконки</span>
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showHealthBars}
+                onChange={(e) => setShowHealthBars(e.target.checked)}
+              />
+              <span>Полоски жизней</span>
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showTankNames}
+                onChange={(e) => setShowTankNames(e.target.checked)}
+              />
+              <span>Названия танков</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
