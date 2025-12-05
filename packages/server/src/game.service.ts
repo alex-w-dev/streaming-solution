@@ -191,6 +191,8 @@ export class GameService implements OnModuleInit {
 
           // Стрельба
           this.handleShooting(tank, enemiesInRange);
+          // Продолжаем движение даже во время стрельбы
+          this.moveTank(tank, deltaTime);
         } else {
           // Враги обнаружены, но вне зоны стрельбы - двигаемся
           tank.isShooting = false;
@@ -245,8 +247,6 @@ export class GameService implements OnModuleInit {
   }
 
   private moveTank(tank: GameTank, deltaTime: number) {
-    if (tank.isShooting) return; // не двигаемся во время стрельбы
-
     const direction = tank.side === 'left' ? 1 : -1;
     const distance = tank.speed * deltaTime;
     tank.x += distance * direction;
