@@ -8,8 +8,8 @@ const MAP_WIDTH = 2000;
 const MAP_HEIGHT = 200; // высота для вида сбоку
 const SCALE = 0.5; // масштаб для отображения
 const NUM_LANES = 20; // количество полос глубины
-const BASE_SIZE = 100; // базовый размер в процентах (самая дальняя полоса)
-const MAX_SIZE = 150; // максимальный размер в процентах (самая близкая полоса) - разница 50%
+const BASE_SIZE = 80; // базовый размер в процентах (самая дальняя полоса) - 0.8
+const MAX_SIZE = 130; // максимальный размер в процентах (самая близкая полоса) - 1.3
 const LANE_HEIGHT_OFFSET = 2; // смещение каждой полосы в пикселях
 
 const Battle = () => {
@@ -77,7 +77,7 @@ const Battle = () => {
 
   // Получаем размер для полосы (в процентах)
   const getLaneSize = (lane: number): number => {
-    // lane 0 = 100%, lane 19 = 120%
+    // lane 0 = 80% (0.8), lane 19 = 130% (1.3)
     return BASE_SIZE + (lane / (NUM_LANES - 1)) * (MAX_SIZE - BASE_SIZE);
   };
 
@@ -347,13 +347,15 @@ const Battle = () => {
                     const tankHeight = tankHeights.get(shooter.id) || 20;
                     // Пули на уровне 2/3 от высоты изображения танка
                     const bulletOffset = tankHeight * (2 / 3);
+                    // Смещение пули в зависимости от стороны танка
+                    const bulletXOffset = shooter.side === "left" ? 30 : -30;
 
                     return (
                       <div
                         key={projectile.id}
                         style={{
                           position: "absolute",
-                          left: getTankX(projectile.x) - 2,
+                          left: getTankX(projectile.x) + bulletXOffset - 2,
                           bottom: bulletOffset,
                           width: 4,
                           height: 4,
