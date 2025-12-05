@@ -22,7 +22,7 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect, OnMo
   server: Server;
 
   private gameStateInterval: NodeJS.Timeout | null = null;
-  private readonly BROADCAST_RATE = 30; // обновлений в секунду
+  private readonly BROADCAST_RATE = 30; // обновлений в секунду (оптимально для браузера)
 
   constructor(private gameService: GameService) {}
 

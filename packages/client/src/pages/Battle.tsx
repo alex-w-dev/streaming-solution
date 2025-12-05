@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { io } from "socket.io-client";
 import type { GameState, GameTank, GameProjectile } from "@streaming/shared";
 import { getTankIconUrl } from "@streaming/shared";
+import BattleLine from "../components/BattleLine";
 
 const MAP_WIDTH = 2000;
 const MAP_HEIGHT = 200; // высота для вида сбоку
@@ -9,7 +10,7 @@ const SCALE = 0.5; // масштаб для отображения
 const NUM_LANES = 20; // количество полос глубины
 const BASE_SIZE = 100; // базовый размер в процентах (самая дальняя полоса)
 const MAX_SIZE = 150; // максимальный размер в процентах (самая близкая полоса) - разница 50%
-const LANE_HEIGHT_OFFSET = 1; // смещение каждой полосы в пикселях
+const LANE_HEIGHT_OFFSET = 2; // смещение каждой полосы в пикселях
 
 const Battle = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -20,6 +21,10 @@ const Battle = () => {
   const [useColorizedIcons, setUseColorizedIcons] = useState(true);
   const [showHealthBars, setShowHealthBars] = useState(false);
   const [showTankNames, setShowTankNames] = useState(false);
+
+  // Референсы для интерполяции
+  const lastGameStateRef = useRef<GameState | null>(null);
+  const lastUpdateTimeRef = useRef<number>(Date.now());
 
   // Компонент битвы танков
 
@@ -39,6 +44,8 @@ const Battle = () => {
     });
 
     newSocket.on("gameState", (state: GameState) => {
+      lastGameStateRef.current = state;
+      lastUpdateTimeRef.current = Date.now();
       setGameState(state);
     });
 
@@ -68,10 +75,6 @@ const Battle = () => {
     return originalUrl;
   };
 
-  const getTankX = (x: number) => {
-    return (x / MAP_WIDTH) * (MAP_WIDTH * SCALE);
-  };
-
   // Получаем размер для полосы (в процентах)
   const getLaneSize = (lane: number): number => {
     // lane 0 = 100%, lane 19 = 120%
@@ -81,10 +84,50 @@ const Battle = () => {
   // Получаем позицию Y для полосы
   const getLaneY = (lane: number): number => {
     // Самая дальняя полоса (0) вверху, самая близкая (19) внизу
-    // Каждая полоса на 1px ниже предыдущей
-    const baseY = MAP_HEIGHT * SCALE - 50; // базовая позиция земли
+    // Каждая полоса на 2px ниже предыдущей
+    const baseY = MAP_HEIGHT * SCALE; // базовая позиция земли
     return baseY - (NUM_LANES - 1 - lane) * LANE_HEIGHT_OFFSET;
   };
+
+  const getTankX = (x: number) => {
+    return (x / MAP_WIDTH) * (MAP_WIDTH * SCALE);
+  };
+
+  // Мемоизация распределения танков и пуль по полосам
+  const lanesData = useMemo(() => {
+    if (!gameState) return [];
+
+    const lanes: Array<{
+      laneIndex: number;
+      tanks: GameTank[];
+      projectiles: GameProjectile[];
+      laneSize: number;
+      laneY: number;
+    }> = [];
+
+    for (let laneIndex = 0; laneIndex < NUM_LANES; laneIndex++) {
+      const tanksOnLane = gameState.tanks.filter(
+        (tank) => (tank.lane ?? 0) === laneIndex
+      );
+
+      const projectilesOnLane = gameState.projectiles.filter((projectile) => {
+        const shooter = gameState.tanks.find(
+          (t) => t.id === projectile.shooterId
+        );
+        return shooter && (shooter.lane ?? 0) === laneIndex;
+      });
+
+      lanes.push({
+        laneIndex,
+        tanks: tanksOnLane,
+        projectiles: projectilesOnLane,
+        laneSize: getLaneSize(laneIndex),
+        laneY: getLaneY(laneIndex),
+      });
+    }
+
+    return lanes;
+  }, [gameState]);
 
   return (
     <div>
@@ -128,197 +171,203 @@ const Battle = () => {
               </div>
             )}
 
-            {/* Танки (вид сбоку) */}
-            {gameState.tanks.map((tank: GameTank) => {
-              const iconUrl = getTankIconUrlForDisplay(tank);
-              const tankX = getTankX(tank.x);
-              const healthPercent = (tank.health / tank.maxHealth) * 100;
-              const healthColor = tank.side === "left" ? "#4CAF50" : "#F44336";
-              const lane = tank.lane ?? 0; // полоса танка (0-19)
-              const laneSize = getLaneSize(lane); // размер в процентах
-              const laneY = getLaneY(lane); // позиция Y полосы
-
+            {/* 20 дорожек (BattleLine компонентов) */}
+            {lanesData.map((laneData) => {
               return (
-                <div
-                  key={tank.id}
+                <BattleLine
+                  key={laneData.laneIndex}
+                  scale={laneData.laneSize}
                   style={{
-                    position: "absolute",
-                    left: tankX,
-                    bottom: MAP_HEIGHT * SCALE - laneY,
-                    transform: "translateX(-50%)", // центрирование по X
-                    zIndex: 10 + lane, // более близкие полосы выше
+                    bottom: MAP_HEIGHT * SCALE - laneData.laneY,
+                    zIndex: 10 + laneData.laneIndex,
                   }}
                 >
-                  {/* Индикатор здоровья */}
-                  {showHealthBars && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: -20,
-                        left: 0,
-                        width: "100%",
-                        height: 6,
-                        backgroundColor: "#333",
-                        borderRadius: 3,
-                        overflow: "hidden",
-                        transform: `scale(${laneSize / 100})`, // масштабируем под размер полосы
-                        transformOrigin: "top center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${healthPercent}%`,
-                          height: "100%",
-                          backgroundColor: healthColor,
-                          transition: "width 0.1s ease",
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* Танки на этой полосе */}
+                  {laneData.tanks.map((tank: GameTank) => {
+                    const iconUrl = getTankIconUrlForDisplay(tank);
+                    const tankX = getTankX(tank.x);
+                    const healthPercent = (tank.health / tank.maxHealth) * 100;
+                    const healthColor =
+                      tank.side === "left" ? "#4CAF50" : "#F44336";
 
-                  {/* Название танка */}
-                  {showTankNames && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: showHealthBars ? -60 : -40,
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        whiteSpace: "nowrap",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        color: "#fff",
-                        textShadow: `
-                          -1px -1px 0 #000,
-                          1px -1px 0 #000,
-                          -1px 1px 0 #000,
-                          1px 1px 0 #000
-                        `,
-                        pointerEvents: "none",
-                        zIndex: 20,
-                      }}
-                    >
-                      {tank.tankData.name || "Танк"}
-                    </div>
-                  )}
-
-                  {/* Танк */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-end", // выравнивание по низу
-                      justifyContent: "center",
-                      transform: `${
-                        tank.side === "right" ? "scaleX(-1)" : ""
-                      } scale(${laneSize / 100})`,
-                      transformOrigin: "bottom center",
-                    }}
-                    title={`${tank.tankData.name || "Танк"} | HP: ${Math.round(
-                      tank.health
-                    )}/${tank.maxHealth} | Полоса: ${lane}`}
-                  >
-                    {iconUrl ? (
-                      <img
-                        src={iconUrl}
-                        alt={tank.tankData.name || "Танк"}
-                        style={{
-                          display: "block",
-                          maxWidth: "none",
-                          height: "auto",
-                        }}
-                        onLoad={(e) => {
-                          // Сохраняем высоту изображения для расчета позиции пуль
-                          const target = e.target as HTMLImageElement;
-                          const height =
-                            target.naturalHeight || target.offsetHeight;
-                          setTankHeights((prev) => {
-                            const newMap = new Map(prev);
-                            newMap.set(tank.id, height);
-                            return newMap;
-                          });
-                        }}
-                        onError={(e) => {
-                          // Fallback если иконка не загрузилась
-                          console.error(
-                            "Failed to load tank icon:",
-                            iconUrl,
-                            tank.tankData.name
-                          );
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = "none";
-                          const parent = target.parentElement;
-                          if (parent) {
-                            parent.innerHTML = `<div style="width: 40px; height: 30px; background: ${
-                              tank.side === "left" ? "#4CAF50" : "#F44336"
-                            }; border: 2px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${
-                              tank.isShooting ? "⚡" : "▣"
-                            }</div>`;
-                            // Устанавливаем высоту для fallback
-                            setTankHeights((prev) => {
-                              const newMap = new Map(prev);
-                              newMap.set(tank.id, 30);
-                              return newMap;
-                            });
-                          }
-                        }}
-                      />
-                    ) : (
+                    return (
                       <div
+                        key={tank.id}
                         style={{
-                          width: 40,
-                          height: 30,
-                          backgroundColor:
-                            tank.side === "left" ? "#4CAF50" : "#F44336",
-                          border: "2px solid #000",
-                          borderRadius: "4px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontWeight: "bold",
+                          position: "absolute",
+                          left: tankX,
+                          bottom: 0,
+                          transform: "translateX(-50%)",
+                          transition: "left 0.05s linear",
+                          willChange: "left",
                         }}
                       >
-                        {tank.isShooting ? "⚡" : "▣"}
+                        {/* Индикатор здоровья */}
+                        {showHealthBars && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: -20,
+                              left: 0,
+                              width: "100%",
+                              height: 6,
+                              backgroundColor: "#333",
+                              borderRadius: 3,
+                              overflow: "hidden",
+                              transformOrigin: "top center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${healthPercent}%`,
+                                height: "100%",
+                                backgroundColor: healthColor,
+                                transition: "width 0.1s ease",
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Название танка */}
+                        {showTankNames && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: showHealthBars ? -60 : -40,
+                              left: "50%",
+                              transform: "translateX(-50%)",
+                              whiteSpace: "nowrap",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              color: "#fff",
+                              textShadow: `
+                                -1px -1px 0 #000,
+                                1px -1px 0 #000,
+                                -1px 1px 0 #000,
+                                1px 1px 0 #000
+                              `,
+                              pointerEvents: "none",
+                              zIndex: 20,
+                            }}
+                          >
+                            {tank.tankData.name || "Танк"}
+                          </div>
+                        )}
+
+                        {/* Танк */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "center",
+                            transform:
+                              tank.side === "right" ? "scaleX(-1)" : "",
+                            transformOrigin: "bottom center",
+                          }}
+                          title={`${
+                            tank.tankData.name || "Танк"
+                          } | HP: ${Math.round(tank.health)}/${
+                            tank.maxHealth
+                          } | Полоса: ${laneData.laneIndex}`}
+                        >
+                          {iconUrl ? (
+                            <img
+                              src={iconUrl}
+                              alt={tank.tankData.name || "Танк"}
+                              style={{
+                                display: "block",
+                                maxWidth: "none",
+                                height: "auto",
+                              }}
+                              onLoad={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                const height =
+                                  target.naturalHeight || target.offsetHeight;
+                                setTankHeights((prev) => {
+                                  const newMap = new Map(prev);
+                                  newMap.set(tank.id, height);
+                                  return newMap;
+                                });
+                              }}
+                              onError={(e) => {
+                                console.error(
+                                  "Failed to load tank icon:",
+                                  iconUrl,
+                                  tank.tankData.name
+                                );
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = "none";
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `<div style="width: 40px; height: 30px; background: ${
+                                    tank.side === "left" ? "#4CAF50" : "#F44336"
+                                  }; border: 2px solid #000; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${
+                                    tank.isShooting ? "⚡" : "▣"
+                                  }</div>`;
+                                  setTankHeights((prev) => {
+                                    const newMap = new Map(prev);
+                                    newMap.set(tank.id, 30);
+                                    return newMap;
+                                  });
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 40,
+                                height: 30,
+                                backgroundColor:
+                                  tank.side === "left" ? "#4CAF50" : "#F44336",
+                                border: "2px solid #000",
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {tank.isShooting ? "⚡" : "▣"}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    );
+                  })}
 
-            {/* Снаряды (вид сбоку) */}
-            {gameState.projectiles.map((projectile: GameProjectile) => {
-              // Находим танк, который выстрелил этот снаряд
-              const shooter = gameState.tanks.find(
-                (t) => t.id === projectile.shooterId
-              );
-              if (!shooter) return null;
+                  {/* Снаряды на этой полосе */}
+                  {laneData.projectiles.map((projectile: GameProjectile) => {
+                    const shooter = gameState.tanks.find(
+                      (t) => t.id === projectile.shooterId
+                    );
+                    if (!shooter) return null;
 
-              const shooterLane = shooter.lane ?? 0;
-              const laneY = getLaneY(shooterLane);
-              const laneSize = getLaneSize(shooterLane);
+                    // Получаем реальную высоту изображения танка
+                    const tankHeight = tankHeights.get(shooter.id) || 20;
+                    // Пули на уровне 2/3 от высоты изображения танка
+                    const bulletOffset = tankHeight * (2 / 3);
 
-              // Получаем реальную высоту изображения танка
-              const tankHeight = tankHeights.get(shooter.id) || 20;
-              // Пули на уровне 2/3 от высоты изображения танка, с учетом масштаба полосы
-              const bulletOffset = tankHeight * (2 / 3) * (laneSize / 100);
-
-              return (
-                <div
-                  key={projectile.id}
-                  style={{
-                    position: "absolute",
-                    left: getTankX(projectile.x) - 2,
-                    bottom: MAP_HEIGHT * SCALE - laneY + bulletOffset,
-                    width: 4 * (laneSize / 100),
-                    height: 4 * (laneSize / 100),
-                    backgroundColor: "#FFD700",
-                    borderRadius: "50%",
-                    border: "1px solid #FFA500",
-                    boxShadow: "0 0 3px #FFD700",
-                    zIndex: 10 + shooterLane,
-                  }}
-                />
+                    return (
+                      <div
+                        key={projectile.id}
+                        style={{
+                          position: "absolute",
+                          left: getTankX(projectile.x) - 2,
+                          bottom: bulletOffset,
+                          width: 4,
+                          height: 4,
+                          backgroundColor: "#FFD700",
+                          borderRadius: "50%",
+                          border: "1px solid #FFA500",
+                          boxShadow: "0 0 3px #FFD700",
+                          transition: "left 0.05s linear",
+                          willChange: "left",
+                        }}
+                      />
+                    );
+                  })}
+                </BattleLine>
               );
             })}
           </div>
