@@ -21,6 +21,8 @@ const Battle = () => {
   const [useColorizedIcons, setUseColorizedIcons] = useState(true);
   const [showHealthBars, setShowHealthBars] = useState(false);
   const [showTankNames, setShowTankNames] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState(1);
+  const [botLevel, setBotLevel] = useState(1);
 
   // Референсы для интерполяции
   const lastGameStateRef = useRef<GameState | null>(null);
@@ -49,12 +51,26 @@ const Battle = () => {
       setGameState(state);
     });
 
+    // Получаем уровень бота
+    const fetchBotLevel = async () => {
+      try {
+        const response = await fetch("http://localhost:3000/game/bot-level");
+        const data = await response.json();
+        setBotLevel(data.level);
+      } catch (error) {
+        console.error("Failed to fetch bot level:", error);
+      }
+    };
+    fetchBotLevel();
+    const botLevelInterval = setInterval(fetchBotLevel, 2000); // обновляем каждые 2 секунды
+
     // Сохраняем socket для использования в обработчике клика
     (window as any).battleSocket = newSocket;
 
     return () => {
       newSocket.disconnect();
       delete (window as any).battleSocket;
+      clearInterval(botLevelInterval);
     };
   }, []);
 
@@ -401,6 +417,67 @@ const Battle = () => {
               {gameState.projectiles.length}
             </div>
           )}
+          <div>Уровень бота: {botLevel}</div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <label>
+              Уровень танка:
+              <select
+                value={selectedLevel}
+                onChange={(e) => setSelectedLevel(Number(e.target.value))}
+                style={{ marginLeft: "5px", padding: "5px" }}
+              >
+                {Array.from({ length: 11 }, (_, i) => i + 1).map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={async () => {
+                try {
+                  console.log(
+                    `Spawning player tank with level: ${selectedLevel}`
+                  );
+                  const response = await fetch(
+                    "http://localhost:3000/game/spawn-player-tank",
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ level: selectedLevel }),
+                    }
+                  );
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(
+                      "Failed to spawn tank:",
+                      response.status,
+                      errorText
+                    );
+                    alert(`Не удалось вызвать танк: ${errorText}`);
+                    return;
+                  }
+                  const result = await response.json();
+                  console.log("Tank spawned successfully:", result);
+                } catch (error) {
+                  console.error("Failed to spawn tank:", error);
+                  alert("Не удалось вызвать танк");
+                }
+              }}
+              style={{
+                padding: "5px 15px",
+                cursor: "pointer",
+                backgroundColor: "#4CAF50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+              }}
+            >
+              Вызвать
+            </button>
+          </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <label
               style={{

@@ -5,10 +5,11 @@ import { WsGateway } from './ws.gateway';
 import { TanksController } from './tanks.controller';
 import { TanksService } from './tanks.service';
 import { GameService } from './game.service';
+import { GameController } from './game.controller';
 
 @Module({
   imports: [],
-  controllers: [AppController, TanksController],
+  controllers: [AppController, TanksController, GameController],
   providers: [AppService, WsGateway, TanksService, GameService],
 })
 export class AppModule {}

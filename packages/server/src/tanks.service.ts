@@ -68,4 +68,21 @@ export class TanksService {
   getAllTanks(): Tank[] {
     return this.tanks;
   }
+
+  getTankByLevel(level: number): Tank | null {
+    if (level < 1 || level > 11) {
+      return null;
+    }
+    // Фильтруем танки по уровню (tier)
+    const tanksByLevel = this.tanks.filter(
+      (tank) => tank.tier === level,
+    );
+    if (tanksByLevel.length === 0) {
+      return null;
+    }
+    // Возвращаем случайный танк указанного уровня
+    return tanksByLevel[
+      Math.floor(Math.random() * tanksByLevel.length)
+    ];
+  }
 }

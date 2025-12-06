@@ -7,6 +7,8 @@ import {
   GameEvent,
 } from '@streaming/shared';
 import { TanksService } from './tanks.service';
+import { getTanksLevelsForBot } from './utils/get-tanks-levels-for-bot';
+import { getTanksRespounInterval } from './utils/get-tanks-respoun-interval';
 
 @Injectable()
 export class GameService implements OnModuleInit {
@@ -14,6 +16,9 @@ export class GameService implements OnModuleInit {
   private gameLoopInterval: NodeJS.Timeout | null = null;
   private lastUpdateTime: number = 0;
   private isPaused: boolean = false;
+  private botLevel: number = 1; // уровень правого бота (динамический)
+  private readonly PLAYER_BOT_LEVEL = 1; // уровень левого бота (всегда 1)
+  private rightBotTanksQueue: number[] = []; // очередь уровней танков для правого бота
   private readonly TICK_RATE = 60; // обновлений в секунду
   private readonly TICK_DELTA = 1000 / this.TICK_RATE; // миллисекунды между тиками
   private readonly MAP_WIDTH = 2000;
@@ -84,24 +89,35 @@ export class GameService implements OnModuleInit {
     const allTanks = this.tanksService.getAllTanks();
     if (allTanks.length === 0) return;
 
-    // Левый респаун
-    if (
-      now - this.gameState.lastSpawnTime.left >=
-      this.getRandomSpawnInterval()
-    ) {
-      const randomTank = allTanks[Math.floor(Math.random() * allTanks.length)];
-      this.spawnTank(randomTank, 'left');
-      this.gameState.lastSpawnTime.left = now;
+    // Левый респаун (игрок - бот уровня 1)
+    const leftInterval = getTanksRespounInterval(this.PLAYER_BOT_LEVEL);
+    if (now - this.gameState.lastSpawnTime.left >= leftInterval) {
+      const playerTank = this.tanksService.getTankByLevel(
+        this.PLAYER_BOT_LEVEL,
+      );
+      if (playerTank) {
+        if (this.spawnTank(playerTank, 'left')) {
+          this.gameState.lastSpawnTime.left = now;
+        }
+      }
     }
 
-    // Правый респаун
-    if (
-      now - this.gameState.lastSpawnTime.right >=
-      this.getRandomSpawnInterval()
-    ) {
-      const randomTank = allTanks[Math.floor(Math.random() * allTanks.length)];
-      this.spawnTank(randomTank, 'right');
-      this.gameState.lastSpawnTime.right = now;
+    // Правый респаун (бот с динамическим уровнем)
+    const rightInterval = getTanksRespounInterval(this.botLevel);
+    if (now - this.gameState.lastSpawnTime.right >= rightInterval) {
+      // Если очередь пуста, генерируем новые уровни
+      if (this.rightBotTanksQueue.length === 0) {
+        this.rightBotTanksQueue = getTanksLevelsForBot(this.botLevel);
+      }
+
+      // Берем первый уровень из очереди
+      const tankLevel = this.rightBotTanksQueue.shift() || 1;
+      const botTank = this.tanksService.getTankByLevel(tankLevel);
+      if (botTank) {
+        if (this.spawnTank(botTank, 'right')) {
+          this.gameState.lastSpawnTime.right = now;
+        }
+      }
     }
   }
 
@@ -112,14 +128,17 @@ export class GameService implements OnModuleInit {
     );
   }
 
-  private spawnTank(tankData: Tank, side: 'left' | 'right') {
+  private spawnTank(tankData: Tank, side: 'left' | 'right'): boolean {
     if (
       !tankData.max_health ||
       !tankData.damage1 ||
       !tankData.damage_per_minute ||
       !tankData.speed_forward_kmh
     ) {
-      return; // пропускаем танки без необходимых данных
+      console.warn(
+        `Tank ${tankData.name} missing required data, skipping spawn`,
+      );
+      return false; // пропускаем танки без необходимых данных
     }
 
     const fireRate = tankData.damage_per_minute / tankData.damage1 / 60; // выстрелов в секунду
@@ -161,6 +180,10 @@ export class GameService implements OnModuleInit {
     };
 
     this.gameState.tanks.push(gameTank);
+    console.log(
+      `Spawned ${side} tank: ${tankData.name} (tier ${tankData.tier}) at lane ${lane}`,
+    );
+    return true;
   }
 
   private updateTanks(deltaTime: number) {
@@ -325,29 +348,40 @@ export class GameService implements OnModuleInit {
       (t) => t.side === 'right' && t.health > 0,
     );
 
-    let victory = false;
+    let leftVictory = false;
+    let rightVictory = false;
 
-    // Проверяем левых танков
+    // Проверяем левых танков (игрок)
     for (const tank of leftTanks) {
       const distanceToRightRespawn = this.gameState.rightRespawnX - tank.x;
       if (distanceToRightRespawn <= this.RESPAWN_DISTANCE) {
-        victory = true;
+        leftVictory = true;
         break;
       }
     }
 
-    // Проверяем правых танков
-    if (!victory) {
-      for (const tank of rightTanks) {
-        const distanceToLeftRespawn = tank.x - this.gameState.leftRespawnX;
-        if (distanceToLeftRespawn <= this.RESPAWN_DISTANCE) {
-          victory = true;
-          break;
-        }
+    // Проверяем правых танков (бот)
+    for (const tank of rightTanks) {
+      const distanceToLeftRespawn = tank.x - this.gameState.leftRespawnX;
+      if (distanceToLeftRespawn <= this.RESPAWN_DISTANCE) {
+        rightVictory = true;
+        break;
       }
     }
 
-    if (victory) {
+    if (leftVictory || rightVictory) {
+      // Игрок выиграл (левая сторона) - бот проиграл, увеличиваем уровень бота
+      if (leftVictory) {
+        this.botLevel += 1;
+        console.log(
+          `Игрок выиграл! Бот проиграл. Уровень бота увеличен до ${this.botLevel}`,
+        );
+      }
+      // Бот выиграл (правая сторона) - уменьшаем уровень бота (но не меньше 1)
+      if (rightVictory) {
+        this.botLevel = Math.max(1, this.botLevel - 1);
+        console.log(`Бот выиграл! Уровень бота уменьшен до ${this.botLevel}`);
+      }
       this.resetGame();
     }
   }
@@ -361,6 +395,8 @@ export class GameService implements OnModuleInit {
       left: Date.now(),
       right: Date.now(),
     };
+    // Очищаем очередь танков для правого бота
+    this.rightBotTanksQueue = [];
   }
 
   private getDistance(x1: number, x2: number): number {
@@ -380,6 +416,27 @@ export class GameService implements OnModuleInit {
     const state = JSON.parse(JSON.stringify(this.gameState)); // глубокое копирование
     state.isPaused = this.isPaused; // убеждаемся что пауза синхронизирована
     return state;
+  }
+
+  getBotLevel(): number {
+    return this.botLevel;
+  }
+
+  spawnPlayerTank(level: number): boolean {
+    if (level < 1 || level > 11) {
+      console.warn(`Invalid level: ${level}`);
+      return false;
+    }
+    const tank = this.tanksService.getTankByLevel(level);
+    if (!tank) {
+      console.warn(`No tank found for level: ${level}`);
+      return false;
+    }
+    const spawned = this.spawnTank(tank, 'left');
+    if (!spawned) {
+      console.warn(`Failed to spawn tank: ${tank.name} (level ${level})`);
+    }
+    return spawned;
   }
 
   onModuleDestroy() {
